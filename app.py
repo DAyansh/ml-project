@@ -3,7 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import joblib
 
-st.set_page_config(page_title="Box Office Revenue Predictor", page_icon="🎬", layout="wide")
+st.set_page_config(page_title="Cinematic Success Predictor", page_icon="🎬", layout="wide")
 
 # ---------- GLOBAL STYLE ----------
 st.markdown("""
@@ -26,9 +26,9 @@ section[data-testid="stSidebar"] {
 }
 section[data-testid="stSidebar"] h1, section[data-testid="stSidebar"] .sidebar-title {
     font-family: 'Bebas Neue', sans-serif;
-    letter-spacing: 2px;
+    letter-spacing: 1.5px;
     color: #D4AF37;
-    font-size: 1.8rem;
+    font-size: 1.4rem;
 }
 
 /* Headings marquee-style */
@@ -115,6 +115,18 @@ p, li, span, label {
     margin-bottom: 14px;
 }
 
+/* Confidence note */
+.confidence-note {
+    background: #17151C;
+    border-left: 3px solid #D4AF37;
+    border-radius: 4px;
+    padding: 12px 16px;
+    font-size: 0.85rem;
+    color: #9C948A;
+    margin-top: 14px;
+    max-width: 600px;
+}
+
 /* Buttons */
 .stButton>button {
     background: #D4AF37;
@@ -128,14 +140,23 @@ p, li, span, label {
     background: #E8C766;
     color: #0B0B10;
 }
-           
+
+/* Hide Streamlit's default menu since we have a fixed custom theme */
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
 </style>
 """, unsafe_allow_html=True)
 
+# ---------- HELPER: currency formatting (Improvement 1) ----------
+def format_currency(value):
+    value = max(0, value)
+    if value >= 1_000_000_000:
+        return f"${value/1_000_000_000:.2f} Billion"
+    else:
+        return f"${value/1_000_000:.2f} Million"
+
 # ---------- SIDEBAR NAVIGATION ----------
-st.sidebar.markdown('<div class="sidebar-title">🎬 BOX OFFICE AI</div>', unsafe_allow_html=True)
+st.sidebar.markdown('<div class="sidebar-title">🎬 BOX OFFICE REVENUE PREDICTOR</div>', unsafe_allow_html=True)
 st.sidebar.caption("Smart revenue forecasting for films")
 st.sidebar.markdown("---")
 
@@ -144,6 +165,14 @@ page = st.sidebar.radio(
     ["🏠 Home", "📊 Dataset Explorer", "📈 Visualizations", "🤖 Revenue Prediction", "🏆 Model Performance", "👨‍💻 About Project"],
     label_visibility="collapsed"
 )
+
+FEATURES = ['budget', 'popularity', 'runtime', 'vote_average', 'vote_count']
+
+@st.cache_data
+def load_clean_data():
+    movies = pd.read_csv("data/tmdb_5000_movies.csv")
+    movies = movies[~((movies['budget'] == 0) & (movies['revenue'] == 0))]
+    return movies
 
 # ---------- HOME PAGE ----------
 if page == "🏠 Home":
@@ -171,13 +200,13 @@ if page == "🏠 Home":
     st.markdown('<div class="film-divider"></div>', unsafe_allow_html=True)
     st.markdown("Use the sidebar to explore the dataset, view visual insights, or predict revenue for a hypothetical movie.")
 
+# ---------- DATASET EXPLORER ----------
 elif page == "📊 Dataset Explorer":
     st.title("DATASET EXPLORER")
     st.markdown('<p class="hero-tagline">Browse the cleaned dataset used to train the model — 3,913 films after removing incomplete records.</p>', unsafe_allow_html=True)
     st.markdown('<div class="film-divider"></div>', unsafe_allow_html=True)
 
-    movies_clean = pd.read_csv("data/tmdb_5000_movies.csv")
-    movies_clean = movies_clean[~((movies_clean['budget'] == 0) & (movies_clean['revenue'] == 0))]
+    movies_clean = load_clean_data()
 
     col1, col2 = st.columns(2)
     with col1:
@@ -190,17 +219,17 @@ elif page == "📊 Dataset Explorer":
     st.markdown(f"**{len(filtered)} movies** match your filters")
     st.dataframe(
         filtered[['title', 'budget', 'revenue', 'runtime', 'vote_average', 'popularity']].sort_values('revenue', ascending=False),
-        use_container_width=True,
+        width="stretch",  # Improvement 4: replaces deprecated use_container_width
         height=400
     )
 
+# ---------- VISUALIZATIONS ----------
 elif page == "📈 Visualizations":
     st.title("VISUALIZATIONS")
     st.markdown('<p class="hero-tagline">Visual patterns behind what drives box office revenue.</p>', unsafe_allow_html=True)
     st.markdown('<div class="film-divider"></div>', unsafe_allow_html=True)
 
-    movies_clean = pd.read_csv("data/tmdb_5000_movies.csv")
-    movies_clean = movies_clean[~((movies_clean['budget'] == 0) & (movies_clean['revenue'] == 0))]
+    movies_clean = load_clean_data()
 
     tab1, tab2 = st.tabs(["Budget vs Revenue", "Popularity vs Revenue"])
 
@@ -228,6 +257,7 @@ elif page == "📈 Visualizations":
             spine.set_color('#2a2530')
         st.pyplot(fig2)
 
+# ---------- REVENUE PREDICTION ----------
 elif page == "🤖 Revenue Prediction":
     st.title("REVENUE PREDICTION")
     st.markdown('<p class="hero-tagline">Enter a hypothetical movie\'s details and get an instant revenue estimate.</p>', unsafe_allow_html=True)
@@ -248,13 +278,23 @@ elif page == "🤖 Revenue Prediction":
 
     if st.button("🎬 Predict Revenue"):
         input_data = pd.DataFrame([[budget, popularity, runtime, vote_average, vote_count]],
-                                    columns=['budget', 'popularity', 'runtime', 'vote_average', 'vote_count'])
+                                    columns=FEATURES)
         prediction = model.predict(input_data)[0]
         prediction = max(0, prediction)  # revenue can't be negative
 
+        # Improvement 1: currency in Millions/Billions
+        formatted_prediction = format_currency(prediction)
+
         st.markdown(
-            f'<div class="ticket" style="max-width:400px;"><div class="ticket-label">Predicted Revenue</div>'
-            f'<div class="ticket-value" style="font-size:2.2rem;">${prediction:,.0f}</div></div>',
+            f'<div class="ticket" style="max-width:420px;"><div class="ticket-label">Predicted Revenue</div>'
+            f'<div class="ticket-value" style="font-size:2.2rem;">{formatted_prediction}</div></div>',
+            unsafe_allow_html=True
+        )
+
+        # Improvement 2: confidence note
+        st.markdown(
+            '<div class="confidence-note">⚠️ Prediction based on historical TMDB movie data. '
+            'Actual revenue may vary due to marketing, competition, and audience reception.</div>',
             unsafe_allow_html=True
         )
 
@@ -264,6 +304,7 @@ elif page == "🤖 Revenue Prediction":
         else:
             st.warning(f"Estimated loss: {roi:.1f}% below budget")
 
+# ---------- MODEL PERFORMANCE ----------
 elif page == "🏆 Model Performance":
     st.title("MODEL PERFORMANCE")
     st.markdown('<p class="hero-tagline">How well does the model actually predict? Evaluated on 783 unseen test movies.</p>', unsafe_allow_html=True)
@@ -278,12 +319,32 @@ elif page == "🏆 Model Performance":
         st.markdown('<div class="ticket"><div class="ticket-label">Algorithm</div><div class="ticket-value" style="font-size:1.1rem;">Linear Regression</div></div>', unsafe_allow_html=True)
 
     st.markdown('<div class="film-divider"></div>', unsafe_allow_html=True)
+
+    # Improvement 3: feature importance chart
+    st.markdown("### Which Features Matter Most?")
+    st.markdown('<p class="hero-tagline">Correlation of each feature with revenue — higher means stronger influence on the prediction.</p>', unsafe_allow_html=True)
+
+    movies_clean = load_clean_data()
+    correlations = movies_clean[FEATURES + ['revenue']].corr()['revenue'].drop('revenue').sort_values()
+
+    fig3, ax3 = plt.subplots(figsize=(8, 4.5))
+    fig3.patch.set_facecolor('#0B0B10')
+    ax3.set_facecolor('#0B0B10')
+    ax3.barh(correlations.index, correlations.values, color='#D4AF37')
+    ax3.set_xlabel('Correlation with Revenue', color='#C9C2B4')
+    ax3.tick_params(colors='#9C948A')
+    for spine in ax3.spines.values():
+        spine.set_color('#2a2530')
+    st.pyplot(fig3)
+
+    st.markdown('<div class="film-divider"></div>', unsafe_allow_html=True)
     st.markdown("### What R² = 0.68 means")
     st.write("The model explains roughly 68% of the variation in box office revenue using just 5 features: budget, popularity, runtime, vote average, and vote count. The remaining 32% is driven by factors not captured here — marketing spend, star power, release timing, competition, and word of mouth.")
 
     st.markdown("### Where the model struggles")
     st.write("Predictions are more accurate for low-to-mid budget films, since most of the training data falls in that range. Blockbuster outliers (very high revenue) are harder to predict precisely, since fewer examples exist to learn from.")
 
+# ---------- ABOUT PROJECT ----------
 elif page == "👨‍💻 About Project":
     st.title("ABOUT THE PROJECT")
     st.markdown('<div class="film-divider"></div>', unsafe_allow_html=True)
@@ -300,5 +361,14 @@ elif page == "👨‍💻 About Project":
     st.markdown("### Tech Stack")
     st.write("Python · Pandas · Scikit-learn · Matplotlib · Streamlit")
 
+    # Improvement 5: GitHub link
+    st.markdown("### Source Code")
+    st.markdown(
+        '<a href="https://github.com/DAyansh/ml-project" target="_blank" '
+        'style="color:#D4AF37; font-weight:600; text-decoration:none;">'
+        '🔗 View this project on GitHub</a>',
+        unsafe_allow_html=True
+    )
+
     st.markdown('<div class="film-divider"></div>', unsafe_allow_html=True)
-    st.caption("Built as an academic ML project — Box Office Revenue Predictor")
+    st.caption("Built as an academic ML project — Box Office Revenue Predictor. Not affiliated with TMDB or any film studio. Data is for educational purposes only.")
