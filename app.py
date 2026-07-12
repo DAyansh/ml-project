@@ -3,7 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import joblib
 
-st.set_page_config(page_title="Cinematic Success Predictor", page_icon="🎬", layout="wide")
+st.set_page_config(page_title="Box Office Revenue Predictor", page_icon="🎬", layout="wide")
 
 # ---------- GLOBAL STYLE ----------
 st.markdown("""
@@ -136,9 +136,15 @@ p, li, span, label {
     border: none;
     border-radius: 6px;
 }
+.stButton>button p, .stButton>button span, .stButton>button div {
+    color: #0B0B10 !important;
+}
 .stButton>button:hover {
     background: #E8C766;
     color: #0B0B10;
+}
+.stButton>button:hover p, .stButton>button:hover span, .stButton>button:hover div {
+    color: #0B0B10 !important;
 }
 
 /* Hide Streamlit's default menu since we have a fixed custom theme */
@@ -338,6 +344,45 @@ elif page == "🏆 Model Performance":
     st.pyplot(fig3)
 
     st.markdown('<div class="film-divider"></div>', unsafe_allow_html=True)
+
+    # Model coefficients (standardized) — shows fair, comparable feature importance
+    st.markdown("### Model Coefficients (Standardized)")
+    st.markdown(
+        '<p class="hero-tagline">Raw coefficients can\'t be compared directly — budget is measured in '
+        'millions while vote_average ranges 0\u201310. Standardizing puts every feature on the same scale '
+        'so we can rank true influence fairly.</p>', unsafe_allow_html=True
+    )
+
+    X_train_full = movies_clean[FEATURES].fillna(0)
+    X_std = (X_train_full - X_train_full.mean()) / X_train_full.std()
+    from sklearn.linear_model import LinearRegression as _LR
+    std_model = _LR()
+    std_model.fit(X_std, movies_clean['revenue'])
+
+    coef_df = pd.DataFrame({
+        'Feature': FEATURES,
+        'Standardized Coefficient': std_model.coef_
+    }).sort_values('Standardized Coefficient', key=abs, ascending=True)
+
+    fig4, ax4 = plt.subplots(figsize=(8, 4))
+    fig4.patch.set_facecolor('#0B0B10')
+    ax4.set_facecolor('#0B0B10')
+    colors = ['#9B2C3B' if v < 0 else '#D4AF37' for v in coef_df['Standardized Coefficient']]
+    ax4.barh(coef_df['Feature'], coef_df['Standardized Coefficient'], color=colors)
+    ax4.set_xlabel('Standardized Coefficient (impact on revenue)', color='#C9C2B4')
+    ax4.tick_params(colors='#9C948A')
+    for spine in ax4.spines.values():
+        spine.set_color('#2a2530')
+    st.pyplot(fig4)
+
+    st.markdown(
+        '<div class="confidence-note">Once standardized, <b>vote_count</b> and <b>budget</b> emerge as the '
+        'strongest drivers of predicted revenue — while popularity, vote_average, and runtime contribute '
+        'far less. This is why changing popularity alone barely moves a prediction for a high-budget film.</div>',
+        unsafe_allow_html=True
+    )
+
+    st.markdown('<div class="film-divider"></div>', unsafe_allow_html=True)
     st.markdown("### What R² = 0.68 means")
     st.write("The model explains roughly 68% of the variation in box office revenue using just 5 features: budget, popularity, runtime, vote average, and vote count. The remaining 32% is driven by factors not captured here — marketing spend, star power, release timing, competition, and word of mouth.")
 
@@ -371,4 +416,4 @@ elif page == "👨‍💻 About Project":
     )
 
     st.markdown('<div class="film-divider"></div>', unsafe_allow_html=True)
-    st.caption("Built as an academic ML project — Box Office Revenue Predictor. Not affiliated with TMDB or any film studio. Data is for educational purposes only.")
+    st.caption("Built as an academic ML project — Box Office Revenue Predictor")
